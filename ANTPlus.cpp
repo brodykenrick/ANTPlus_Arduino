@@ -35,6 +35,7 @@ void ANTPlus::begin(Stream &serial)
   //Interrupts?
   
   clear_to_send = false;
+  msgResponseExpected = MESG_INVALID_ID;
 }
 
 
@@ -154,8 +155,10 @@ unsigned char ANTPlus::writeByte(unsigned char out, unsigned char chksum) {
   return chksum;
 }
 
-//TODO: DEBUG: Convert to a packet object for printing....
-boolean ANTPlus::send(unsigned msgId, unsigned char argCnt, ...) {
+//TODO: DEBUG: Convert to a packet object for quicker/easier printing....
+//TODO: Extend the return types
+boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned char argCnt, ...)
+{
   va_list arg;
   va_start (arg, argCnt);
   unsigned char byteOut;
@@ -163,8 +166,8 @@ boolean ANTPlus::send(unsigned msgId, unsigned char argCnt, ...) {
   int cnt = 0;
   
   boolean ret_val = false;
-  
-  if(clear_to_send)
+
+  if(clear_to_send && (msgResponseExpected == MESG_INVALID_ID))
   {
     #ifdef DEBUG
       Serial.print("TX[");
@@ -185,7 +188,9 @@ boolean ANTPlus::send(unsigned msgId, unsigned char argCnt, ...) {
       chksum = writeByte(msgId, chksum);        // send message id
        
       // send data
-      for (cnt=1; cnt <= argCnt; cnt++) {
+      //TODO: Is this corect, or offset by 2 now?
+      for (cnt=1; cnt <= argCnt; cnt++)
+      {
         byteOut = va_arg(arg, unsigned int);
         chksum = writeByte(byteOut, chksum);
       }
@@ -195,10 +200,15 @@ boolean ANTPlus::send(unsigned msgId, unsigned char argCnt, ...) {
       
       clear_to_send = false;
       ret_val = true;
+      
+      //We are now waiting for this message
+      //There are other functions that take care of the checks
+      //and eventually will have timeouts... and possibly callbacks...
+      msgResponseExpected = msgId_ResponseExpected;
     }
     else
     {
-      Serial.println("Can't send -- not clear to send");
+      Serial.println("Can't send -- not clear to send or awaiting a response");
       ret_val = false;
     }
 #ifdef DEBUG
@@ -206,6 +216,44 @@ boolean ANTPlus::send(unsigned msgId, unsigned char argCnt, ...) {
 #endif
     return ret_val;
 }
+
+
+
+MESSAGE_READ ANTPlus::checkResponseLastSent( ANT_Packet * packet, int packetSize, int wait_timeout = 0 )
+{
+    MESSAGE_READ ret_val = MESSAGE_READ_NONE;
+    //If we are actually awaiting something....
+//    if(msgResponseExpected != MESG_INVALID_ID)
+    {
+        int packetsRead = readPacket(packet, packetSize, wait_timeout);
+        if (packetsRead > 0)
+        {
+            printPacket( packet, false );
+            
+            if( packet->msg_id == msgResponseExpected )
+            {
+                Serial.println("Received expected message!");
+                msgResponseExpected = MESG_INVALID_ID;
+                ret_val = MESSAGE_READ_EXPECTED;
+            }
+            else
+            {
+                Serial.println("Received unexpected message!");
+                ret_val = MESSAGE_READ_OTHER;
+            }
+        }
+        else
+        {
+            Serial.println("No messages ready!");
+            ret_val = MESSAGE_READ_NONE;
+        }
+    
+    }
+    return ret_val; 
+}
+
+
+
 
 
 //TODO: Move these to progmem
@@ -290,27 +338,5 @@ void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_retu
   {
      Serial.print(" ");
   }
-}
- 
-
-
-
-//TODO: Extend to make a boolean?
-//Incorporate into send.....
-//As readPacket will return -1, 0 or 1 (so there is a bug in the caller of this function currently)
-//This is busy using a while loop in the read....
-int ANTPlus::checkReturn()
-{
-  byte packet_buffer[MAXPACKETLEN];
-  ANT_Packet * packet = (ANT_Packet *) packet_buffer;
-  int packetsRead;
- 
-  packetsRead = readPacket(packet, MAXPACKETLEN, PACKETREADTIMEOUT);
-
-  if (packetsRead > 0) {
-    printPacket( packet );
-  }
- 
-  return packetsRead;
 }
 

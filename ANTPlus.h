@@ -298,6 +298,18 @@ enum
 }; 
 
 
+typedef enum
+{
+  MESSAGE_READ_NONE,
+  MESSAGE_READ_ERROR_CHECKSUM,
+  MESSAGE_READ_ERROR_MISSING_SYNC,
+  MESSAGE_READ_ERROR_PACKET_SIZE_EXCEEDED,
+  MESSAGE_READ_EXPECTED,
+  MESSAGE_READ_OTHER
+
+} MESSAGE_READ;
+
+
 
 //TODO: Look at ANT and ANT+ and work out the appropriate breakdown and have a subclass
 class ANTPlus
@@ -314,33 +326,37 @@ class ANTPlus
 
 
     void     hardwareReset( );
-    int      readPacket( ANT_Packet * packet, int packetSize, unsigned int readTimeout);
     
     unsigned char writeByte(unsigned char out, unsigned char chksum);
 
-    boolean send(unsigned msgId, unsigned char argCnt, ...);
+    boolean send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned char argCnt, ...);
     
     void    errorHandler(int errIn);
     
     long    getRxPacketCount(){return this->rx_packet_count;};
 
     void         printPacket(const ANT_Packet * packet, boolean final_carriage_return);
-    int          checkReturn();
+    
+    MESSAGE_READ checkResponseLastSent( ANT_Packet * packet, int packetSize, int wait_timeout );
     
     void   assertedRTSHighAndReturnedLow(){ clear_to_send = true; };
+    boolean awaitingResponseLastSent() {return (msgResponseExpected == MESG_INVALID_ID);};
 
     //Static
     static const char * get_msg_id_str(byte msg_id);
-    
+
+  private:
+    int      readPacket( ANT_Packet * packet, int packetSize, unsigned int readTimeout);
+
   public:
-    boolean clear_to_send; //TODO hide again
-  private:    
+    volatile boolean clear_to_send; //TODO hide again
+  private:
     Stream* mySerial;
 
     long rx_packet_count;
     long tx_packet_count;
     
-    //boolean clear_to_send;
+    unsigned msgResponseExpected; //TODO: This should be an enum.....
 
 
     int RTS_PIN;
