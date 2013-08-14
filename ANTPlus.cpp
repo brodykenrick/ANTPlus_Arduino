@@ -67,7 +67,7 @@ int ANTPlus::readPacket( ANT_Packet * packet, int packetSize, unsigned int readT
    
   unsigned long timeoutExit = millis() + readTimeout;
   
-  Serial.println("readPacket");
+//  Serial.println("readPacket");
  
   while (timeoutExit > millis())
   {
@@ -75,7 +75,7 @@ int ANTPlus::readPacket( ANT_Packet * packet, int packetSize, unsigned int readT
     if (mySerial->available() > 0)
     {
       byteIn = mySerial->read();
-      serial_print_byte_padded_hex( chksum );
+      //serial_print_byte_padded_hex( chksum );
       timeoutExit = millis() + readTimeout;
       if ((byteIn == MESG_TX_SYNC) && (rxBufCnt == 0))
       {
@@ -107,15 +107,15 @@ int ANTPlus::readPacket( ANT_Packet * packet, int packetSize, unsigned int readT
         }
         else
         {
-          Serial.println("gotpacket");
+//          Serial.println("gotpacket");
           memcpy(packet, &rxBuf, rxBufCnt); // should be a complete packet. copy data to packet variable, check checksum and return
           rx_packet_count++;
-          serial_print_byte_padded_hex( chksum );
-          serial_print_byte_padded_hex( ANT_PACKET_CHECKSUM(packet) );
+          //serial_print_byte_padded_hex( chksum );
+          //serial_print_byte_padded_hex( ANT_PACKET_CHECKSUM(packet) );
           
           if (chksum != ANT_PACKET_CHECKSUM(packet))
           {
-            Serial.println("bad checksum");
+//            Serial.println("bad checksum");
             errorHandler(errChecksumError);
             rxBufCnt = 0;
             return -1;
