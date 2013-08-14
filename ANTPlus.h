@@ -241,6 +241,7 @@ extern void serial_print_int_padded_dec( int, byte, boolean final_carriage_retur
 
 
 #define PACKETREADTIMEOUT  100
+#define PACKETREADNEXTBYTETIMEOUT  10 //<! If we get a byte in a read -- how long do we wait for the next byte before timing out...
 #define MAXPACKETLEN        80
 
 
@@ -289,23 +290,20 @@ typedef struct ANT_HRMDataPage_struct
 
 
  
-enum
-{
-  errDefault,
-  errPacketSizeExceeded,
-  errChecksumError,
-  errMissingSync
-}; 
+
 
 
 typedef enum
 {
-  MESSAGE_READ_NONE,
-  MESSAGE_READ_ERROR_CHECKSUM,
+  MESSAGE_READ_NONE, //No message available (immediately or in timeout period)
+  MESSAGE_READ_ERROR_BAD_CHECKSUM,
   MESSAGE_READ_ERROR_MISSING_SYNC,
   MESSAGE_READ_ERROR_PACKET_SIZE_EXCEEDED,
-  MESSAGE_READ_EXPECTED,
-  MESSAGE_READ_OTHER
+  MESSAGE_ERROR_TIMEOUT_MIDMESSAGE,
+  MESSAGE_READ_INTERNAL, //This is remapped to the next two in internal function
+  MESSAGE_READ_OTHER,
+  MESSAGE_READ_EXPECTED
+
 
 } MESSAGE_READ;
 
@@ -321,32 +319,27 @@ class ANTPlus
         int SLEEP_PIN,
         int RESET_PIN
     );
-//    boolean  readPacket(int timeout);
-    void     begin(Stream &serial);
 
+    void     begin(Stream &serial);
 
     void     hardwareReset( );
     
-    unsigned char writeByte(unsigned char out, unsigned char chksum);
 
     boolean send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned char argCnt, ...);
+    MESSAGE_READ readPacket( ANT_Packet * packet, int packetSize, int wait_timeout );
     
-    void    errorHandler(int errIn);
-    
-    long    getRxPacketCount(){return this->rx_packet_count;};
-
     void         printPacket(const ANT_Packet * packet, boolean final_carriage_return);
     
-    MESSAGE_READ checkResponseLastSent( ANT_Packet * packet, int packetSize, int wait_timeout );
-    
     void   assertedRTSHighAndReturnedLow(){ clear_to_send = true; };
+
     boolean awaitingResponseLastSent() {return (msgResponseExpected == MESG_INVALID_ID);};
 
     //Static
     static const char * get_msg_id_str(byte msg_id);
 
   private:
-    int      readPacket( ANT_Packet * packet, int packetSize, unsigned int readTimeout);
+    MESSAGE_READ      readPacketInternal( ANT_Packet * packet, int packetSize, unsigned int readTimeout);
+    unsigned char     writeByte(unsigned char out, unsigned char chksum);
 
   public:
     volatile boolean clear_to_send; //TODO hide again

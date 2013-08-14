@@ -47,6 +47,7 @@ void ANTPlus::hardwareReset()
   digitalWrite(RESET_PIN,   HIGH);
   
   clear_to_send = false;
+  msgResponseExpected = MESG_STARTUP_MESG_ID;
 }
 
 int rxBufCnt = 0;
@@ -57,27 +58,25 @@ unsigned char rxBuf[MAXPACKETLEN];
 // <sync> always 0xa4
 // <msg id> always 0x40 denoting a channel response / event
 // <msg code? success is 0.  See page 84 of ANT MPaU for other codes
-//Returns
-//0 on timeout
-//1 on success
-//-1 on a read fail
-int ANTPlus::readPacket( ANT_Packet * packet, int packetSize, unsigned int readTimeout)
+//readTimeoutMs -- is amount of time to wait for first byte to appear
+MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, unsigned int readTimeoutMs)
 {
   unsigned char byteIn;
   unsigned char chksum = 0;
    
-  unsigned long timeoutExit = millis() + readTimeout;
+  unsigned long timeoutExit = millis() + readTimeoutMs;
   
 //  Serial.println("readPacket");
  
-  while (timeoutExit > millis())
+  while (timeoutExit >= millis()) //First loop will go through (TODO: Swap to a do while for absolute efficiency)
   {
     //This is a busy read
     if (mySerial->available() > 0)
     {
       byteIn = mySerial->read();
       //serial_print_byte_padded_hex( chksum );
-      timeoutExit = millis() + readTimeout;
+      //We have a byte -- so we want to finish off this message (increase timeout)
+      timeoutExit += PACKETREADNEXTBYTETIMEOUT;
       if ((byteIn == MESG_TX_SYNC) && (rxBufCnt == 0))
       {
         rxBuf[rxBufCnt++] = byteIn;
@@ -85,8 +84,7 @@ int ANTPlus::readPacket( ANT_Packet * packet, int packetSize, unsigned int readT
       }
       else if ((rxBufCnt == 0) && (byteIn != MESG_TX_SYNC))
       {
-        errorHandler(errMissingSync);
-        return -1;
+        return MESSAGE_READ_ERROR_MISSING_SYNC;
       }
       else if (rxBufCnt == 1)
       {
@@ -103,8 +101,7 @@ int ANTPlus::readPacket( ANT_Packet * packet, int packetSize, unsigned int readT
         rxBuf[rxBufCnt++] = byteIn;
         if (rxBufCnt > packetSize)
         {
-          errorHandler(errPacketSizeExceeded);
-          return -1;
+          return MESSAGE_READ_ERROR_PACKET_SIZE_EXCEEDED;
         }
         else
         {
@@ -116,32 +113,25 @@ int ANTPlus::readPacket( ANT_Packet * packet, int packetSize, unsigned int readT
           
           if (chksum != ANT_PACKET_CHECKSUM(packet))
           {
-//            Serial.println("bad checksum");
-            errorHandler(errChecksumError);
             rxBufCnt = 0;
-            return -1;
+            return MESSAGE_READ_ERROR_BAD_CHECKSUM;
           }
           else
           {
             //Good packet
             rxBufCnt = 0;
-            return 1;
+            return MESSAGE_READ_INTERNAL;
           }
         }
       }
     }
   }
-  return 0;
-}
-
-void ANTPlus::errorHandler(int errIn)
-{
-#ifdef DEBUG
-  Serial.println();
-  Serial.print("Error: ");
-  Serial.println(errIn);
-#endif
-  while (true) {};
+  
+  if(rxBufCnt != 0)
+  {
+    return MESSAGE_ERROR_TIMEOUT_MIDMESSAGE;
+  }
+  return MESSAGE_READ_NONE;
 }
 
 
@@ -219,35 +209,27 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
 
 
 
-MESSAGE_READ ANTPlus::checkResponseLastSent( ANT_Packet * packet, int packetSize, int wait_timeout = 0 )
+MESSAGE_READ ANTPlus::readPacket( ANT_Packet * packet, int packetSize, int wait_timeout = 0 )
 {
     MESSAGE_READ ret_val = MESSAGE_READ_NONE;
-    //If we are actually awaiting something....
-//    if(msgResponseExpected != MESG_INVALID_ID)
     {
-        int packetsRead = readPacket(packet, packetSize, wait_timeout);
-        if (packetsRead > 0)
+        ret_val = readPacketInternal(packet, packetSize, wait_timeout);
+        if (ret_val == MESSAGE_READ_INTERNAL)
         {
-            printPacket( packet, false );
-            
+            //printPacket( packet, false );
+
             if( packet->msg_id == msgResponseExpected )
             {
-                Serial.println("Received expected message!");
+                //Serial.println("Received expected message!");
                 msgResponseExpected = MESG_INVALID_ID;
                 ret_val = MESSAGE_READ_EXPECTED;
             }
             else
             {
-                Serial.println("Received unexpected message!");
+                //Serial.println("Received unexpected message!");
                 ret_val = MESSAGE_READ_OTHER;
             }
         }
-        else
-        {
-            Serial.println("No messages ready!");
-            ret_val = MESSAGE_READ_NONE;
-        }
-    
     }
     return ret_val; 
 }
@@ -308,7 +290,7 @@ const char * ANTPlus::get_msg_id_str(byte msg_id)
 void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_return = true)
 {
   Serial.print("RX[");
-  serial_print_int_padded_dec( getRxPacketCount(), 6 );
+  serial_print_int_padded_dec( rx_packet_count, 6 );
   Serial.print("] @ ");
   serial_print_int_padded_dec( millis(), 8 );
   Serial.print(" ms > ");
