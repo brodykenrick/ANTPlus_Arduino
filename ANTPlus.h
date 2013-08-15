@@ -271,9 +271,12 @@ typedef struct ANT_DataPage_struct
 } ANT_DataPage;
 
 
+
+
+
 typedef struct ANT_HRMDataPage_struct
 {
-//  byte data_page_number_and_page_change_toggle; //TODO: bit fields?
+//TODO: Check bit fields?
   byte data_page_number:7;
   byte page_change_toggle:1;
 //TODO: Union below
@@ -288,7 +291,32 @@ typedef struct ANT_HRMDataPage_struct
 
 } ANT_HRMDataPage;
 
+typedef struct ANT_SDMDataPage1_struct
+{
+  byte data_page_number;
+  byte last_time_frac;
+  byte last_time_int;
+  byte distance_int;
+  byte distance_frac;
+  byte inst_speed_int;
+  byte inst_speed_frac;
+  byte stride_count;
+  byte update_latency;
+} ANT_SDMDataPage1;
 
+
+
+
+typedef struct ANT_Channel_struct
+{
+   int channel_number;
+   int network_number;
+   int timeout;
+   int device_type;
+   int freq;
+   int period;
+   unsigned char ant_net_key[8];
+} ANT_Channel;
  
 
 
@@ -307,6 +335,16 @@ typedef enum
 
 } MESSAGE_READ;
 
+
+//TODO: tidy this up....
+typedef enum
+{
+  ANT_CHANNEL_ESTABLISH_PROGRESSING,
+  ANT_CHANNEL_ESTABLISH_COMPLETE,
+  ANT_CHANNEL_ESTABLISH_ERROR,
+
+
+}   ANT_CHANNEL_ESTABLISH;
 
 
 //TODO: Look at ANT and ANT+ and work out the appropriate breakdown and have a subclass
@@ -330,9 +368,12 @@ class ANTPlus
     
     void         printPacket(const ANT_Packet * packet, boolean final_carriage_return);
     
-    void   assertedRTSHighAndReturnedLow(){ clear_to_send = true; };
+    void   rTSHighAssertion();
 
-    boolean awaitingResponseLastSent() {return (msgResponseExpected == MESG_INVALID_ID);};
+    boolean awaitingResponseLastSent() {return (msgResponseExpected != MESG_INVALID_ID);};
+
+    //ANT+ stuff...
+    ANT_CHANNEL_ESTABLISH progress_setup_channel( const ANT_Channel * const channel );
 
     //Static
     static const char * get_msg_id_str(byte msg_id);

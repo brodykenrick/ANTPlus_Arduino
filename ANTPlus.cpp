@@ -68,7 +68,7 @@ MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, u
   
 //  Serial.println("readPacket");
  
-  while (timeoutExit >= millis()) //First loop will go through (TODO: Swap to a do while for absolute efficiency)
+  while (timeoutExit >= millis()) //First loop will go through always
   {
     //This is a busy read
     if (mySerial->available() > 0)
@@ -198,7 +198,7 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
     }
     else
     {
-      Serial.println("Can't send -- not clear to send or awaiting a response");
+      //Serial.println("Can't send -- not clear to send or awaiting a response");
       ret_val = false;
     }
 #ifdef DEBUG
@@ -216,12 +216,10 @@ MESSAGE_READ ANTPlus::readPacket( ANT_Packet * packet, int packetSize, int wait_
         ret_val = readPacketInternal(packet, packetSize, wait_timeout);
         if (ret_val == MESSAGE_READ_INTERNAL)
         {
-            //printPacket( packet, false );
-
             if( packet->msg_id == msgResponseExpected )
             {
                 //Serial.println("Received expected message!");
-                msgResponseExpected = MESG_INVALID_ID;
+                msgResponseExpected = MESG_INVALID_ID; //Not waiting on anything anymore
                 ret_val = MESSAGE_READ_EXPECTED;
             }
             else
@@ -320,5 +318,154 @@ void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_retu
   {
      Serial.print(" ");
   }
+}
+
+//Must be called with the same channel until an error or established (i.e. don't start with a different channel in the middle -- one channel at a time)
+//Must not be called with the same channel after it returns ESTABLISHED as that will attempt to reopen....
+ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const channel )
+{
+  //TODO: Move state counter to a member
+  //TODO: A member/check that the channel is not changed mid setup...
+  static int state_counter = 0;
+  boolean sent_ok = true; //Defaults as true as we want to progress the state
+  
+  ANT_CHANNEL_ESTABLISH ret_val = ANT_CHANNEL_ESTABLISH_PROGRESSING;
+
+//  Serial.print("state_counter = ");
+//  Serial.println(state_counter);
+  
+  if(state_counter == 0)
+  {
+    //Serial.println("progress_setup_channel() - Begin");  
+  }
+  else
+  if(state_counter == 1)
+  {
+    //Reqeust CAPs
+    sent_ok = send(MESG_REQUEST_ID, MESG_CAPABILITIES_ID/*Expected response*/, 2, channel->channel_number, MESG_CAPABILITIES_ID);
+  }
+  else
+  if(state_counter == 2)
+  {
+   // Assign Channel
+    //   Channel: 0
+    //   Channel Type: for Receive Channel
+    //   Network Number: 0 for Public Network
+    sent_ok = send(MESG_ASSIGN_CHANNEL_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 3, channel->channel_number, 0, channel->network_number); 
+  }
+  else
+  if(state_counter == 3)
+  {
+ 
+    // Set Channel ID
+    //   Channel Number: 0
+    //   Device Number LSB: 0 for a slave to match any device
+    //   Device Number MSB: 0 for a slave to match any device
+    //   Device Type: bit 7 0 for pairing request bit 6..0 for device type
+    //   Transmission Type: 0 to match any transmission type
+    sent_ok = send(MESG_CHANNEL_ID_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 5, channel->channel_number, 0, 0, channel->device_type, 0);
+  }
+  else
+  if(state_counter == 4)
+  {
+    // Set Network Key
+    //   Network Number
+    //   Key
+    sent_ok = send(MESG_NETWORK_KEY_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 9, channel->network_number, channel->ant_net_key[0], channel->ant_net_key[1], channel->ant_net_key[2], channel->ant_net_key[3], channel->ant_net_key[4], channel->ant_net_key[5], channel->ant_net_key[6], channel->ant_net_key[7]);
+  }
+  else
+  if(state_counter == 5)
+  {
+    // Set Channel Search Timeout
+    //   Channel
+    //   Timeout: time for timeout in 2.5 sec increments
+    sent_ok = send(MESG_CHANNEL_SEARCH_TIMEOUT_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 2, channel->channel_number, channel->timeout);
+  }
+  else
+  if(state_counter == 6)
+  {
+    //ANT_send(1+2, MESG_CHANNEL_RADIO_FREQ_ID, CHAN0, FREQ);
+    // Set Channel RF Frequency
+    //   Channel
+    //   Frequency = 2400 MHz + (FREQ * 1 MHz) (See page 59 of ANT MPaU) 0x39 = 2457 MHz
+    sent_ok = send(MESG_CHANNEL_RADIO_FREQ_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 2, channel->channel_number, channel->freq);
+  }
+  else
+  if(state_counter == 7)
+  {
+    // Set Channel Period
+    sent_ok = send(MESG_CHANNEL_MESG_PERIOD_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 3, channel->channel_number, (channel->period & 0x00FF), ((channel->period & 0xFF00) >> 8));
+  }
+  else
+  if(state_counter == 8)
+  {
+    //Open Channel
+    sent_ok = send(MESG_OPEN_CHANNEL_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 1, channel->channel_number);
+  }
+  else
+  if(state_counter == 9)
+  {
+    //Check if the last message has been responded to
+    if(!awaitingResponseLastSent())
+    {
+      ret_val = ANT_CHANNEL_ESTABLISH_COMPLETE;
+      state_counter = 0; //This is in case it is called with a new channel
+      //Serial.println("progress_setup_channel() - Complete");  
+    }
+    else
+    {
+      sent_ok = false; //Set this to false as it enables the error checking below.
+    }
+  }
+
+  
+  if(sent_ok)
+  {
+    state_counter++;
+  }
+  else
+  {
+    //Not always an error - as sometimes there are messages in the queue that are awaiting a response
+//    Serial.print("Issue sending....");
+    {
+//        Serial.print("Host _NOT_ CTS. ");  
+  //      Serial.print("State = ");  
+  //      Serial.print( state );  
+//        Serial.print(". RTS = ");  
+//        Serial.println( digitalRead(xRTS_PIN) );
+        
+        if( digitalRead(RTS_PIN) == LOW)
+        {
+          static unsigned int sending_issue_counter = 0;
+          sending_issue_counter++;
+          
+          //This should clear on the next loop ( this should be after ANT asserts -- but could conceivably be before it has even responded)
+          // The ISR sets a loop flag and the ISR should be triggered within 50 usecs
+          if(sending_issue_counter >= 50)
+          {
+            //Seems like we missed an RTS assertion.....
+            Serial.println( "Missed an RTS or none was executed by ANT. Restarting...." );
+            sending_issue_counter = 0;
+            hardwareReset();
+            
+            ret_val = ANT_CHANNEL_ESTABLISH_ERROR;
+          }
+        }
+    }
+  }
+  
+  return ret_val;
+}
+
+void   ANTPlus::rTSHighAssertion()
+{
+      //"Waiting for ANT to RTS (let us send again)."
+      //Need to make sure it is low again
+      while( digitalRead(RTS_PIN) != LOW )
+      {
+        //TODO: Is this a bad idea in an ISR
+        delayMicroseconds(50);
+      }
+      clear_to_send = true;
 }
 
