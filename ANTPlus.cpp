@@ -1,7 +1,8 @@
 
 #include "ANTPlus.h"
 
-#define DEBUG 1
+
+
 
 ANTPlus::ANTPlus(
         int RTS_PIN,
@@ -136,7 +137,7 @@ MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, u
 
 
 unsigned char ANTPlus::writeByte(unsigned char out, unsigned char chksum) {
-#ifdef DEBUG
+#ifdef ANTPLUS_DEBUG
   serial_print_byte_padded_hex(out);
   Serial.print(" ");
 #endif
@@ -159,16 +160,21 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
 
   if(clear_to_send && (msgResponseExpected == MESG_INVALID_ID))
   {
-    #ifdef DEBUG
+    #ifdef ANTPLUS_DEBUG
       Serial.print("TX[");
       serial_print_int_padded_dec( tx_packet_count, 6 );
       Serial.print("] @ ");
       serial_print_int_padded_dec( millis(), 8 );
       Serial.print(" ms > ");
+#if defined(ANTPLUS_MSG_STR_DECODE)
       Serial.print( get_msg_id_str(msgId) );
       Serial.print("[0x");
       serial_print_byte_padded_hex(msgId);
       Serial.print("]");
+#else
+      Serial.print("0x");
+      serial_print_byte_padded_hex(msgId);
+#endif //defined(ANTPLUS_MSG_STR_DECODE)
       Serial.print(" - 0x");
     #endif
       tx_packet_count++;
@@ -195,15 +201,16 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
       //There are other functions that take care of the checks
       //and eventually will have timeouts... and possibly callbacks...
       msgResponseExpected = msgId_ResponseExpected;
+#ifdef ANTPLUS_DEBUG
+      Serial.println();
+#endif
     }
     else
     {
       //Serial.println("Can't send -- not clear to send or awaiting a response");
       ret_val = false;
     }
-#ifdef DEBUG
-  Serial.println();
-#endif
+
     return ret_val;
 }
 
@@ -237,7 +244,7 @@ MESSAGE_READ ANTPlus::readPacket( ANT_Packet * packet, int packetSize, int wait_
 
 
 //TODO: Move these to progmem
-#ifdef DEBUG
+#ifdef ANTPLUS_MSG_STR_DECODE
 //Static
 const char * ANTPlus::get_msg_id_str(byte msg_id)
 {
@@ -297,10 +304,16 @@ void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_retu
 //  Serial.print(" ");
   Serial.print( packet->length );
   Serial.print("B ");
+
+#if defined(ANTPLUS_MSG_STR_DECODE)
   Serial.print( get_msg_id_str (packet->msg_id) );
   Serial.print("[0x");
   serial_print_byte_padded_hex(packet->msg_id);
   Serial.print("]");
+#else
+  Serial.print("0x");
+  serial_print_byte_padded_hex(packet->msg_id);
+#endif //defined(ANTPLUS_MSG_STR_DECODE)
   Serial.print(" : ");
   Serial.print("0x");
   int cnt = 0;

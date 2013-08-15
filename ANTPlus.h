@@ -10,14 +10,15 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 
-#define DEBUG 1
+#define ANTPLUS_DEBUG
+#define ANTPLUS_MSG_STR_DECODE //<! Stringiser for various codes for easier debugging
 
+#if defined(NDEBUG)
+#undef ANTPLUS_DEBUG
+#endif
 
 extern void serial_print_byte_padded_hex(byte value);
 extern void serial_print_int_padded_dec( int, byte, boolean final_carriage_return = false);
-
-
-
 
 
 // From antmessage.h
@@ -375,8 +376,9 @@ class ANTPlus
     //ANT+ stuff...
     ANT_CHANNEL_ESTABLISH progress_setup_channel( const ANT_Channel * const channel );
 
-    //Static
+#if defined(ANTPLUS_MSG_STR_DECODE)
     static const char * get_msg_id_str(byte msg_id);
+#endif /*defined(ANTPLUS_MSG_STR_DECODE)*/
 
   private:
     MESSAGE_READ      readPacketInternal( ANT_Packet * packet, int packetSize, unsigned int readTimeout);
