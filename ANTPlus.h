@@ -369,6 +369,10 @@ class ANTPlus
     
     void         printPacket(const ANT_Packet * packet, boolean final_carriage_return);
     
+    void sleep( boolean activate_sleep=true );
+    void suspend(boolean activate_suspend=true );
+    
+    //Callback from the main code
     void   rTSHighAssertion();
 
     boolean awaitingResponseLastSent() {return (msgResponseExpected != MESG_INVALID_ID);};

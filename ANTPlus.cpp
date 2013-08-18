@@ -1,7 +1,8 @@
 
+#define __ASSERT_USE_STDERR
+#include <assert.h>
+
 #include "ANTPlus.h"
-
-
 
 
 ANTPlus::ANTPlus(
@@ -42,7 +43,10 @@ void ANTPlus::begin(Stream &serial)
 
 void ANTPlus::hardwareReset()
 {
-  Serial.println("H/w Reset");  
+  Serial.println("H/w Reset");
+  
+  sleep(false);
+    
   digitalWrite(RESET_PIN,   LOW);
   delay(10);
   digitalWrite(RESET_PIN,   HIGH);
@@ -482,3 +486,20 @@ void   ANTPlus::rTSHighAssertion()
       clear_to_send = true;
 }
 
+
+
+void ANTPlus::sleep(boolean activate_sleep)
+{
+    int logic_level = HIGH; //Sleep
+    if(!activate_sleep)
+    {
+        logic_level = LOW; //Wake
+    }
+    digitalWrite(SLEEP_PIN, logic_level);
+}
+
+void ANTPlus::suspend(boolean activate_suspend)
+{
+    //TODO:
+    assert(false);
+}
