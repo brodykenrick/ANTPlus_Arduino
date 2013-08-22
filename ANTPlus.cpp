@@ -5,6 +5,15 @@
 #include "ANTPlus.h"
 
 
+#if defined(ANTPLUS_DEBUG)
+#define ANTPLUS_DEBUG_PRINT(x)  	        (Serial.print(x))
+#define ANTPLUS_DEBUG_PRINTLN(x)	        (Serial.println(x))
+#else
+#define ANTPLUS_DEBUG_PRINT(x)  	        
+#define ANTPLUS_DEBUG_PRINTLN(x)	        
+//NOTE: The printPacket function still calls directly
+#endif
+
 ANTPlus::ANTPlus(
         int RTS_PIN,
         int SUSPEND_PIN,
@@ -12,11 +21,10 @@ ANTPlus::ANTPlus(
         int RESET_PIN
 )
 {
-this->RTS_PIN = RTS_PIN;
-this->SUSPEND_PIN = SUSPEND_PIN;
-this->SLEEP_PIN = SLEEP_PIN;
-this->RESET_PIN = RESET_PIN;
-
+    this->RTS_PIN = RTS_PIN;
+    this->SUSPEND_PIN = SUSPEND_PIN;
+    this->SLEEP_PIN = SLEEP_PIN;
+    this->RESET_PIN = RESET_PIN;
 }
 
 
@@ -34,7 +42,8 @@ void ANTPlus::begin(Stream &serial)
   digitalWrite(SUSPEND_PIN, HIGH);
   digitalWrite(SLEEP_PIN,   LOW);
   
-  //Interrupts?
+  //Interrupts are set in the main program currently
+  //TODO: Look to see if they should be brought 'in lib'
   
   clear_to_send = false;
   msgResponseExpected = MESG_INVALID_ID;
@@ -43,7 +52,7 @@ void ANTPlus::begin(Stream &serial)
 
 void ANTPlus::hardwareReset()
 {
-  Serial.println("H/w Reset");
+  ANTPLUS_DEBUG_PRINTLN("H/w Reset");
   
   sleep(false);
     
@@ -52,12 +61,12 @@ void ANTPlus::hardwareReset()
   digitalWrite(RESET_PIN,   HIGH);
   
   clear_to_send = false;
-  msgResponseExpected = MESG_STARTUP_MESG_ID;
+  msgResponseExpected = MESG_START_UP;
 }
 
+//TODO: Move this to members...
 int rxBufCnt = 0;
 unsigned char rxBuf[MAXPACKETLEN];
-
 
 // Data <sync> <len> <msg id> <channel> <msg id being responded to> <msg code> <chksum>
 // <sync> always 0xa4
@@ -71,7 +80,7 @@ MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, u
    
   unsigned long timeoutExit = millis() + readTimeoutMs;
   
-//  Serial.println("readPacket");
+//  ANTPLUS_DEBUG_PRINTLN("readPacket");
  
   while (timeoutExit >= millis()) //First loop will go through always
   {
@@ -110,7 +119,7 @@ MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, u
         }
         else
         {
-//          Serial.println("gotpacket");
+//          ANTPLUS_DEBUG_PRINTLN("Received packet");
           memcpy(packet, &rxBuf, rxBufCnt); // should be a complete packet. copy data to packet variable, check checksum and return
           rx_packet_count++;
           //serial_print_byte_padded_hex( chksum );
@@ -170,15 +179,15 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
       Serial.print("] @ ");
       serial_print_int_padded_dec( millis(), 8 );
       Serial.print(" ms > ");
-#if defined(ANTPLUS_MSG_STR_DECODE)
+    #if defined(ANTPLUS_MSG_STR_DECODE)
       Serial.print( get_msg_id_str(msgId) );
       Serial.print("[0x");
       serial_print_byte_padded_hex(msgId);
       Serial.print("]");
-#else
+    #else
       Serial.print("0x");
       serial_print_byte_padded_hex(msgId);
-#endif //defined(ANTPLUS_MSG_STR_DECODE)
+    #endif //defined(ANTPLUS_MSG_STR_DECODE)
       Serial.print(" - 0x");
     #endif
       tx_packet_count++;
@@ -211,7 +220,7 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
     }
     else
     {
-      //Serial.println("Can't send -- not clear to send or awaiting a response");
+      //ANTPLUS_DEBUG_PRINTLN("Can't send -- not clear to send or awaiting a response");
       ret_val = false;
     }
 
@@ -229,13 +238,13 @@ MESSAGE_READ ANTPlus::readPacket( ANT_Packet * packet, int packetSize, int wait_
         {
             if( packet->msg_id == msgResponseExpected )
             {
-                //Serial.println("Received expected message!");
+                //ANTPLUS_DEBUG_PRINTLN("Received expected message!");
                 msgResponseExpected = MESG_INVALID_ID; //Not waiting on anything anymore
                 ret_val = MESSAGE_READ_EXPECTED;
             }
             else
             {
-                //Serial.println("Received unexpected message!");
+                //ANTPLUS_DEBUG_PRINTLN("Received unexpected message!");
                 ret_val = MESSAGE_READ_OTHER;
             }
         }
@@ -255,37 +264,37 @@ const char * ANTPlus::get_msg_id_str(byte msg_id)
   switch (msg_id)
   {
       case MESG_RESPONSE_EVENT_ID:
-        return "MESG_RESPONSE_EVENT_ID";
+        return "RESPONSE_EVENT";
       case MESG_CAPABILITIES_ID:
-        return "MESG_CAPABILITIES_ID";
+        return "CAPABILITIES";
       case MESG_BROADCAST_DATA_ID:
-        return "MESG_BROADCAST_DATA_ID";
+        return "BROADCAST_DATA";
       case MESG_ASSIGN_CHANNEL_ID:
-        return "MESG_ASSIGN_CHANNEL_ID";
+        return "ASSIGN_CHANNEL";
       case MESG_CHANNEL_MESG_PERIOD_ID:
-        return "MESG_CHANNEL_MESG_PERIOD_ID";
+        return "CHANNEL_MESG_PERIOD";
       case MESG_CHANNEL_SEARCH_TIMEOUT_ID:
-        return "MESG_CHANNEL_SEARCH_TIMEOUT_ID";
+        return "CHANNEL_SEARCH_TIMEOUT";
       case MESG_CHANNEL_RADIO_FREQ_ID:
-        return "MESG_CHANNEL_RADIO_FREQ_ID";
+        return "CHANNEL_RADIO_FREQ";
 
 
       case MESG_REQUEST_ID:
-        return "MESG_REQUEST_ID";
+        return "REQUEST";
 
-      case MESG_STARTUP_MESG_ID:
-        return "MESG_STARTUP_MESG_ID";
+      case MESG_START_UP:
+        return "START_UP";
 
 
 
       case MESG_NETWORK_KEY_ID:
-        return "MESG_NETWORK_KEY_ID";
+        return "NETWORK_KEY";
       case MESG_SYSTEM_RESET_ID:
-        return "MESG_SYSTEM_RESET_ID";
+        return "SYSTEM_RESET";
       case MESG_OPEN_CHANNEL_ID:
-        return "MESG_OPEN_CHANNEL_ID";
+        return "OPEN_CHANNEL";
       case MESG_CHANNEL_ID_ID:
-        return "MESG_CHANNEL_ID_ID";
+        return "CHANNEL_ID";
 
       default:
         return "...";
@@ -295,7 +304,8 @@ const char * ANTPlus::get_msg_id_str(byte msg_id)
 #endif
 
 
-
+//NOTE: This function calls Serial.println directly
+//TODO: Make this have an option to print to a different print function
 void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_return = true)
 {
   Serial.print("RX[");
@@ -344,22 +354,19 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
   //TODO: Move state counter to a member
   //TODO: A member/check that the channel is not changed mid setup...
   static int state_counter = 0;
-  boolean sent_ok = true; //Defaults as true as we want to progress the state
+  boolean sent_ok = true; //Defaults as true as we want to progress the state counter
   
   ANT_CHANNEL_ESTABLISH ret_val = ANT_CHANNEL_ESTABLISH_PROGRESSING;
 
-//  Serial.print("state_counter = ");
-//  Serial.println(state_counter);
-  
   if(state_counter == 0)
   {
-    //Serial.println("progress_setup_channel() - Begin");  
+    //ANTPLUS_DEBUG_PRINTLN("progress_setup_channel() - Begin");  
   }
   else
   if(state_counter == 1)
   {
-    //Reqeust CAPs
-    sent_ok = send(MESG_REQUEST_ID, MESG_CAPABILITIES_ID/*Expected response*/, 2, channel->channel_number, MESG_CAPABILITIES_ID);
+    //Request CAPs
+    sent_ok = send(MESG_REQUEST_ID, MESG_CAPABILITIES_ID/*Expected response*/, 2, 0/*Channel number always 0*/, MESG_CAPABILITIES_ID);
   }
   else
   if(state_counter == 2)
@@ -426,8 +433,8 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
     if(!awaitingResponseLastSent())
     {
       ret_val = ANT_CHANNEL_ESTABLISH_COMPLETE;
-      state_counter = 0; //This is in case it is called with a new channel
-      //Serial.println("progress_setup_channel() - Complete");  
+      state_counter = 0; //This is for when this function is called with a new channel
+      //ANTPLUS_DEBUG_PRINTLN("progress_setup_channel() - Complete");  
     }
     else
     {
@@ -443,14 +450,8 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
   else
   {
     //Not always an error - as sometimes there are messages in the queue that are awaiting a response
-//    Serial.print("Issue sending....");
+    //ANTPLUS_DEBUG_PRINTLN("Issue sending....");
     {
-//        Serial.print("Host _NOT_ CTS. ");  
-  //      Serial.print("State = ");  
-  //      Serial.print( state );  
-//        Serial.print(". RTS = ");  
-//        Serial.println( digitalRead(xRTS_PIN) );
-        
         if( digitalRead(RTS_PIN) == LOW)
         {
           static unsigned int sending_issue_counter = 0;
@@ -461,7 +462,7 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
           if(sending_issue_counter >= 50)
           {
             //Seems like we missed an RTS assertion.....
-            Serial.println( "Missed an RTS or none was executed by ANT. Restarting...." );
+            ANTPLUS_DEBUG_PRINTLN( "Missed an RTS or none was executed by ANT. Restarting...." );
             sending_issue_counter = 0;
             hardwareReset();
             
