@@ -351,8 +351,7 @@ void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_retu
 //Must not be called with the same channel after it returns ESTABLISHED as that will attempt to reopen....
 ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const channel )
 {
-  //TODO: Move state counter to a member
-  //TODO: A member/check that the channel is not changed mid setup...
+  //TODO: Move state counter to a member (or in the struct)
   static int state_counter = 0;
   boolean sent_ok = true; //Defaults as true as we want to progress the state counter
   

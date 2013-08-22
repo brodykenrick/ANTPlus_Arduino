@@ -8,7 +8,7 @@
 #define ANTPLus_h
 
 #include <Arduino.h>
-#include <SoftwareSerial.h>
+#include <Stream.h>
 
 //#define ANTPLUS_DEBUG //!< Prints various debug messages. Disable here or via using NDEBUG externally
 //#define ANTPLUS_MSG_STR_DECODE //<! Stringiser for various codes for easier debugging
@@ -189,7 +189,7 @@ class ANTPlus
     unsigned char     writeByte(unsigned char out, unsigned char chksum);
 
   private:
-    Stream* mySerial;
+    Stream* mySerial; //!< Serial -- Software serial or Hardware serial
 
     long rx_packet_count;
     long tx_packet_count;
