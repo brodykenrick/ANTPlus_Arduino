@@ -193,9 +193,11 @@ class ANTPlus
   private:
     Stream* mySerial; //!< Serial -- Software serial or Hardware serial
 
+  public: //TODO: Just temp
     long rx_packet_count;
     long tx_packet_count;
-    
+
+  private:
     unsigned msgResponseExpected; //TODO: This should be an enum.....
     
     volatile boolean clear_to_send;

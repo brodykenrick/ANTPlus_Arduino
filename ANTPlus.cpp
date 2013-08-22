@@ -348,8 +348,8 @@ void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_retu
 }
 
 //Must be called with the same channel until an error or established (i.e. don't start with a different channel in the middle -- one channel at a time)
+//TODO: Test that interleaved calls is relaxed (s.b. with moving of state_counter to struct)
 //Must not be called with the same channel after it returns ESTABLISHED as that will attempt to reopen....
-//TODO: Test that this is relaxed (s.b. with moving of state_counter)
 ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( ANT_Channel * channel )
 {
   boolean sent_ok = true; //Defaults as true as we want to progress the state counter
@@ -431,7 +431,6 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( ANT_Channel * channel )
     if(!awaitingResponseLastSent())
     {
       ret_val = ANT_CHANNEL_ESTABLISH_COMPLETE;
-      channel->state_counter = 0; //This is for when this function is called with a new channel
       //ANTPLUS_DEBUG_PRINTLN("progress_setup_channel() - Complete");  
     }
     else
