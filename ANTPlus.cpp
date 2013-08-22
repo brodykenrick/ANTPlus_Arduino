@@ -349,26 +349,25 @@ void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_retu
 
 //Must be called with the same channel until an error or established (i.e. don't start with a different channel in the middle -- one channel at a time)
 //Must not be called with the same channel after it returns ESTABLISHED as that will attempt to reopen....
-ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const channel )
+//TODO: Test that this is relaxed (s.b. with moving of state_counter)
+ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( ANT_Channel * channel )
 {
-  //TODO: Move state counter to a member (or in the struct)
-  static int state_counter = 0;
   boolean sent_ok = true; //Defaults as true as we want to progress the state counter
   
   ANT_CHANNEL_ESTABLISH ret_val = ANT_CHANNEL_ESTABLISH_PROGRESSING;
 
-  if(state_counter == 0)
+  if(channel->state_counter == 0)
   {
     //ANTPLUS_DEBUG_PRINTLN("progress_setup_channel() - Begin");  
   }
   else
-  if(state_counter == 1)
+  if(channel->state_counter == 1)
   {
     //Request CAPs
     sent_ok = send(MESG_REQUEST_ID, MESG_CAPABILITIES_ID/*Expected response*/, 2, 0/*Channel number always 0*/, MESG_CAPABILITIES_ID);
   }
   else
-  if(state_counter == 2)
+  if(channel->state_counter == 2)
   {
    // Assign Channel
     //   Channel: 0
@@ -377,7 +376,7 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
     sent_ok = send(MESG_ASSIGN_CHANNEL_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 3, channel->channel_number, 0, channel->network_number); 
   }
   else
-  if(state_counter == 3)
+  if(channel->state_counter == 3)
   {
  
     // Set Channel ID
@@ -389,7 +388,7 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
     sent_ok = send(MESG_CHANNEL_ID_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 5, channel->channel_number, 0, 0, channel->device_type, 0);
   }
   else
-  if(state_counter == 4)
+  if(channel->state_counter == 4)
   {
     // Set Network Key
     //   Network Number
@@ -397,7 +396,7 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
     sent_ok = send(MESG_NETWORK_KEY_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 9, channel->network_number, channel->ant_net_key[0], channel->ant_net_key[1], channel->ant_net_key[2], channel->ant_net_key[3], channel->ant_net_key[4], channel->ant_net_key[5], channel->ant_net_key[6], channel->ant_net_key[7]);
   }
   else
-  if(state_counter == 5)
+  if(channel->state_counter == 5)
   {
     // Set Channel Search Timeout
     //   Channel
@@ -405,7 +404,7 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
     sent_ok = send(MESG_CHANNEL_SEARCH_TIMEOUT_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 2, channel->channel_number, channel->timeout);
   }
   else
-  if(state_counter == 6)
+  if(channel->state_counter == 6)
   {
     //ANT_send(1+2, MESG_CHANNEL_RADIO_FREQ_ID, CHAN0, FREQ);
     // Set Channel RF Frequency
@@ -414,25 +413,25 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
     sent_ok = send(MESG_CHANNEL_RADIO_FREQ_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 2, channel->channel_number, channel->freq);
   }
   else
-  if(state_counter == 7)
+  if(channel->state_counter == 7)
   {
     // Set Channel Period
     sent_ok = send(MESG_CHANNEL_MESG_PERIOD_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 3, channel->channel_number, (channel->period & 0x00FF), ((channel->period & 0xFF00) >> 8));
   }
   else
-  if(state_counter == 8)
+  if(channel->state_counter == 8)
   {
     //Open Channel
     sent_ok = send(MESG_OPEN_CHANNEL_ID, MESG_RESPONSE_EVENT_ID/*Expected response*/, 1, channel->channel_number);
   }
   else
-  if(state_counter == 9)
+  if(channel->state_counter == 9)
   {
     //Check if the last message has been responded to
     if(!awaitingResponseLastSent())
     {
       ret_val = ANT_CHANNEL_ESTABLISH_COMPLETE;
-      state_counter = 0; //This is for when this function is called with a new channel
+      channel->state_counter = 0; //This is for when this function is called with a new channel
       //ANTPLUS_DEBUG_PRINTLN("progress_setup_channel() - Complete");  
     }
     else
@@ -444,7 +443,7 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( const ANT_Channel * const
   
   if(sent_ok)
   {
-    state_counter++;
+    channel->state_counter++;
   }
   else
   {

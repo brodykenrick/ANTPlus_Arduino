@@ -121,6 +121,8 @@ typedef struct ANT_Channel_struct
    int freq;
    int period;
    unsigned char ant_net_key[8];
+   
+   int state_counter;
 } ANT_Channel;
  
 
@@ -178,7 +180,7 @@ class ANTPlus
     boolean awaitingResponseLastSent() {return (msgResponseExpected != MESG_INVALID_ID);};
 
     //ANT+ to setup a channel
-    ANT_CHANNEL_ESTABLISH progress_setup_channel( const ANT_Channel * const channel );
+    ANT_CHANNEL_ESTABLISH progress_setup_channel( ANT_Channel * channel );
 
 #if defined(ANTPLUS_MSG_STR_DECODE)
     static const char * get_msg_id_str(byte msg_id);
