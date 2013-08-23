@@ -1,8 +1,21 @@
 //Copyright 2013 Brody Kenrick.
+//An Ant+ library over UART ('Serial' or SoftwareSerial)
 
-//Took code from:
+//Provides message send and receive functionality
+//Also provides stringisers for a few messages
+//Provides higher-level functionality for setting up listening channels for a sensor
+
+//This works with a Nordic nRF24AP2 (should work with AP1 also)
+//Tested with this nRF24AP2 module : http://www.goodluckbuy.com/nrf24ap2-networking-module-zigbee-module-with-ant-transceiver-.html
+
+//Thanks to DigitalHack
 //http://digitalhacksblog.blogspot.com.au/2012_10_01_archive.html
-// as a starting point
+//That code was taken as a starting point
+
+//Works with the hardware 'Serial' or a SoftwareSerial
+//NOTE: That hardware 'Serial' might have issues when other interrupts
+// are present (e.g. SPI) and might not receive all messages.
+// SS does not have this issue.
 
 #ifndef ANTPLus_h
 #define ANTPLus_h
@@ -21,11 +34,8 @@
 #include "antdefines.h"
 #include "antmessage.h"
 
-
-
-#define PACKETREADTIMEOUT  (100)
-#define PACKETREADNEXTBYTETIMEOUT  (10) //<! If we get a byte in a read -- how long do we wait for the next byte before timing out...
-#define MAXPACKETLEN        (80)
+#define ANT_PACKET_READ_NEXT_BYTE_TIMEOUT_MS  (10) //<! If we get a byte in a read -- how long do we wait for the next byte before timing out...
+#define ANT_MAX_PACKET_LEN        (80)             //!< This is the size of a packet buffer that should be presented for a read function
 
 #define ANT_DEVICE_NUMBER_CHANNELS (8) //!< nRF24AP2 has an 8 channel version.
 
@@ -45,16 +55,30 @@
 
 #define DATA_PAGE_SPEED_DISTANCE_1              (0x01) 
 
+#define PUBLIC_NETWORK     (  0)
+
 #define DEVCE_TYPE_HRM     (120)
 #define DEVCE_TYPE_CADENCE (121)
 #define DEVCE_TYPE_SDM     (124)
 #define DEVCE_TYPE_GPS     (  0)
+
+#define DEVCE_TIMEOUT      (12) //!< N * 2.5 : 12 > 30 seconds
+#define DEVCE_GPS_FREQ     (50) //!< 2400 + N MHz : 50 > 2450
+#define DEVCE_SENSOR_FREQ  (57) //!< 2400 + N MHz : 57 > 2457
+
+//TODO: add other rates
+#define DEVCE_SDM_LOWEST_RATE     (16268)
+#define DEVCE_HRM_LOWEST_RATE     (32280)
+
+#define DEVCE_GPS_RATE     (8070)
+#define DEVCE_CADENCE_RATE     (8085)
 
 
 //TODO: Tidy.... Perhaps add into the class as external functions (else just use normal print....)
 extern void serial_print_byte_padded_hex(byte value);
 extern void serial_print_int_padded_dec( int, byte, boolean final_carriage_return = false);
 
+//! ANT Packet coming off the wire.
 typedef struct ANT_Packet_struct
 {
    byte sync;
@@ -111,7 +135,7 @@ typedef struct ANT_SDMDataPage1_struct
 
 
 
-
+//! Details required to establish an ANT+ (and ANT?) channel. See progress_setup_channel().
 typedef struct ANT_Channel_struct
 {
    int channel_number;
@@ -127,14 +151,14 @@ typedef struct ANT_Channel_struct
  
 
 
-
+//! See readPacket().
 typedef enum
 {
   MESSAGE_READ_NONE, //No message available (immediately or after timeout period)
   MESSAGE_READ_ERROR_BAD_CHECKSUM,
   MESSAGE_READ_ERROR_MISSING_SYNC,
   MESSAGE_READ_ERROR_PACKET_SIZE_EXCEEDED,
-  MESSAGE_ERROR_TIMEOUT_MIDMESSAGE,
+  MESSAGE_READ_INFO_TIMEOUT_MIDMESSAGE, //!< This might be recoverable on a subsequent call
   MESSAGE_READ_INTERNAL, //This is remapped to one of the next two in the internal read function
   MESSAGE_READ_OTHER,
   MESSAGE_READ_EXPECTED
@@ -142,7 +166,7 @@ typedef enum
 } MESSAGE_READ;
 
 
-//TODO: tidy this up....
+//! See progress_setup_channel().
 typedef enum
 {
   ANT_CHANNEL_ESTABLISH_PROGRESSING,
@@ -152,7 +176,7 @@ typedef enum
 }   ANT_CHANNEL_ESTABLISH;
 
 
-//TODO: Look at ANT and ANT+ and work out the appropriate breakdown and have a subclass
+//TODO: Look at ANT and ANT+ and work out the appropriate breakdown for a subclass/separate class
 class ANTPlus
 {
   public:
@@ -179,7 +203,7 @@ class ANTPlus
 
     boolean awaitingResponseLastSent() {return (msgResponseExpected != MESG_INVALID_ID);};
 
-    //ANT+ to setup a channel
+    //!ANT+ to setup a channel
     ANT_CHANNEL_ESTABLISH progress_setup_channel( ANT_Channel * channel );
 
 #if defined(ANTPLUS_MSG_STR_DECODE)
@@ -196,11 +220,15 @@ class ANTPlus
   public: //TODO: Just temp
     long rx_packet_count;
     long tx_packet_count;
+    long hw_reset_count;
 
   private:
     unsigned msgResponseExpected; //TODO: This should be an enum.....
     
     volatile boolean clear_to_send;
+    
+    int rxBufCnt;
+    unsigned char rxBuf[ANT_MAX_PACKET_LEN];
 
     int RTS_PIN;
     int SUSPEND_PIN;

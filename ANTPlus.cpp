@@ -1,3 +1,5 @@
+//Copyright 2013 Brody Kenrick.
+//An Ant+ library over UART ('Serial' or SoftwareSerial)
 
 #define __ASSERT_USE_STDERR
 #include <assert.h>
@@ -11,7 +13,7 @@
 #else
 #define ANTPLUS_DEBUG_PRINT(x)  	        
 #define ANTPLUS_DEBUG_PRINTLN(x)	        
-//NOTE: The printPacket function still calls directly
+//NOTE: The printPacket function still calls Serial directly. TODO: Adjust that.
 #endif
 
 ANTPlus::ANTPlus(
@@ -25,6 +27,8 @@ ANTPlus::ANTPlus(
     this->SUSPEND_PIN = SUSPEND_PIN;
     this->SLEEP_PIN = SLEEP_PIN;
     this->RESET_PIN = RESET_PIN;
+    
+    hw_reset_count = 0;
 }
 
 
@@ -45,8 +49,10 @@ void ANTPlus::begin(Stream &serial)
   //Interrupts are set in the main program currently
   //TODO: Look to see if they should be brought 'in lib'
   
-  clear_to_send = false;
-  msgResponseExpected = MESG_INVALID_ID;
+  
+  //This should not be strictly necessary - the device should always come up by itself....
+  //But let's make sure we didn't miss the first RTS in a power-up race
+  hardwareReset();
 }
 
 
@@ -55,42 +61,39 @@ void ANTPlus::hardwareReset()
   ANTPLUS_DEBUG_PRINTLN("H/w Reset");
   
   sleep(false);
-    
   digitalWrite(RESET_PIN,   LOW);
-  delay(10);
-  digitalWrite(RESET_PIN,   HIGH);
-  
+  delay(5);
+  //Reset all variables before we release the ANT
   clear_to_send = false;
   msgResponseExpected = MESG_START_UP;
+  rxBufCnt = 0;
+  rx_packet_count = 0;
+  tx_packet_count = 0;
+  hw_reset_count++;
+  delay(5);
+  digitalWrite(RESET_PIN,   HIGH);
 }
-
-//TODO: Move this to members...
-int rxBufCnt = 0;
-unsigned char rxBuf[MAXPACKETLEN];
 
 // Data <sync> <len> <msg id> <channel> <msg id being responded to> <msg code> <chksum>
 // <sync> always 0xa4
-// <msg id> always 0x40 denoting a channel response / event
-// <msg code? success is 0.  See page 84 of ANT MPaU for other codes
-//readTimeoutMs -- is amount of time to wait for first byte to appear
+// <msg id> 0x40==MESG_RESPONSE_EVENT_ID denoting a channel response / event
+// <msg id> 0x4E==MESG_BROADCAST_DATA_ID denoting a broadcast (e.g. HRM or SDM)
+// <msg code> success is 0.  See page 84 of ANT MPaU for other codes
+//readTimeoutMs -- is amount of time to wait for first byte to appeaer (can be 0)
 MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, unsigned int readTimeoutMs)
 {
   unsigned char byteIn;
   unsigned char chksum = 0;
-   
   unsigned long timeoutExit = millis() + readTimeoutMs;
   
-//  ANTPLUS_DEBUG_PRINTLN("readPacket");
- 
   while (timeoutExit >= millis()) //First loop will go through always
   {
     //This is a busy read
     if (mySerial->available() > 0)
     {
       byteIn = mySerial->read();
-      //serial_print_byte_padded_hex( chksum );
       //We have a byte -- so we want to finish off this message (increase timeout)
-      timeoutExit += PACKETREADNEXTBYTETIMEOUT;
+      timeoutExit += ANT_PACKET_READ_NEXT_BYTE_TIMEOUT_MS;
       if ((byteIn == MESG_TX_SYNC) && (rxBufCnt == 0))
       {
         rxBuf[rxBufCnt++] = byteIn;
@@ -119,12 +122,8 @@ MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, u
         }
         else
         {
-//          ANTPLUS_DEBUG_PRINTLN("Received packet");
-          memcpy(packet, &rxBuf, rxBufCnt); // should be a complete packet. copy data to packet variable, check checksum and return
+          memcpy(packet, &rxBuf, rxBufCnt); // Should be a complete packet. copy data to packet variable, check checksum and return
           rx_packet_count++;
-          //serial_print_byte_padded_hex( chksum );
-          //serial_print_byte_padded_hex( ANT_PACKET_CHECKSUM(packet) );
-          
           if (chksum != ANT_PACKET_CHECKSUM(packet))
           {
             rxBufCnt = 0;
@@ -143,13 +142,14 @@ MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, u
   
   if(rxBufCnt != 0)
   {
-    return MESSAGE_ERROR_TIMEOUT_MIDMESSAGE;
+    return MESSAGE_READ_INFO_TIMEOUT_MIDMESSAGE;
   }
   return MESSAGE_READ_NONE;
 }
 
-
-unsigned char ANTPlus::writeByte(unsigned char out, unsigned char chksum) {
+//! Write out a single byte and return the updated checksum
+unsigned char ANTPlus::writeByte(unsigned char out, unsigned char chksum)
+{
 #ifdef ANTPLUS_DEBUG
   serial_print_byte_padded_hex(out);
   Serial.print(" ");
@@ -159,8 +159,10 @@ unsigned char ANTPlus::writeByte(unsigned char out, unsigned char chksum) {
   return chksum;
 }
 
-//TODO: DEBUG: Convert to a packet object for quicker/easier printing....
+//TODO: DEBUG: Convert (or add function) for a packet struct for quicker/easier printing....
 //TODO: Extend the return types
+// msgId_ResponseExpected if set to another ID than MESG_INVALID_ID will not allow a subsequent send until that message is received.
+// NOTE: This request/response check still has the potentioal for holes in it but it is sufficient for now
 boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned char argCnt, ...)
 {
   va_list arg;
@@ -196,8 +198,7 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
       chksum = writeByte(argCnt, chksum);       // send length
       chksum = writeByte(msgId, chksum);        // send message id
        
-      // send data
-      //TODO: Is this corect, or offset by 2 now?
+      // Send data
       for (cnt=1; cnt <= argCnt; cnt++)
       {
         byteOut = va_arg(arg, unsigned int);
@@ -210,7 +211,7 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
       clear_to_send = false;
       ret_val = true;
       
-      //We are now waiting for this message
+      //We are now waiting for this message (if it was not set as INVALID)
       //There are other functions that take care of the checks
       //and eventually will have timeouts... and possibly callbacks...
       msgResponseExpected = msgId_ResponseExpected;
@@ -228,7 +229,9 @@ boolean ANTPlus::send(unsigned msgId, unsigned msgId_ResponseExpected, unsigned 
 }
 
 
-
+//! Read a packet into ANT_Packet struct
+//readTimeoutMs -- is amount of time to wait for first byte to appeaer (can be 0)
+//Return an indication of error, no packet received, the expected packet was received or another packet was received.
 MESSAGE_READ ANTPlus::readPacket( ANT_Packet * packet, int packetSize, int wait_timeout = 0 )
 {
     MESSAGE_READ ret_val = MESSAGE_READ_NONE;
@@ -258,7 +261,7 @@ MESSAGE_READ ANTPlus::readPacket( ANT_Packet * packet, int packetSize, int wait_
 
 //TODO: Move these to progmem
 #ifdef ANTPLUS_MSG_STR_DECODE
-//Static
+//! returns msg_id converted into a human readable string.
 const char * ANTPlus::get_msg_id_str(byte msg_id)
 {
   switch (msg_id)
@@ -278,14 +281,11 @@ const char * ANTPlus::get_msg_id_str(byte msg_id)
       case MESG_CHANNEL_RADIO_FREQ_ID:
         return "CHANNEL_RADIO_FREQ";
 
-
       case MESG_REQUEST_ID:
         return "REQUEST";
 
       case MESG_START_UP:
         return "START_UP";
-
-
 
       case MESG_NETWORK_KEY_ID:
         return "NETWORK_KEY";
@@ -303,7 +303,7 @@ const char * ANTPlus::get_msg_id_str(byte msg_id)
 }
 #endif
 
-
+//! Print a packet for debugging. Does decoding of some ids/codes
 //NOTE: This function calls Serial.println directly
 //TODO: Make this have an option to print to a different print function
 void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_return = true)
@@ -472,20 +472,21 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( ANT_Channel * channel )
   return ret_val;
 }
 
+//! A function that is called when an RTS interrupt is received in the main program
 void   ANTPlus::rTSHighAssertion()
 {
       //"Waiting for ANT to RTS (let us send again)."
       //Need to make sure it is low again
       while( digitalRead(RTS_PIN) != LOW )
       {
-        //TODO: Is this a bad idea in an ISR
+        //TODO: Is this a bad idea in an ISR?
         delayMicroseconds(50);
       }
       clear_to_send = true;
 }
 
 
-
+//!Put ANT module into sleep mode. NOTE: This seems to have some issues.
 void ANTPlus::sleep(boolean activate_sleep)
 {
     int logic_level = HIGH; //Sleep
@@ -496,8 +497,10 @@ void ANTPlus::sleep(boolean activate_sleep)
     digitalWrite(SLEEP_PIN, logic_level);
 }
 
+//!Put ANT module into suspend mode. NOTE: Not implemented
 void ANTPlus::suspend(boolean activate_suspend)
 {
     //TODO:
     assert(false);
 }
+
