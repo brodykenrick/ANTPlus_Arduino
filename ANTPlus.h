@@ -75,10 +75,6 @@
 #define DEVCE_CADENCE_RATE     (8085)
 
 
-//TODO: Tidy.... Perhaps add into the class as external functions (else just use normal print....)
-extern void serial_print_byte_padded_hex(byte value);
-extern void serial_print_int_padded_dec( int, byte, boolean final_carriage_return = false);
-
 //! ANT Packet coming off the wire.
 typedef struct ANT_Packet_struct
 {
@@ -231,9 +227,13 @@ class ANTPlus
     static const char * get_msg_id_str(byte msg_id);
 #endif /*defined(ANTPLUS_MSG_STR_DECODE)*/
 
+
   private:
     MESSAGE_READ      readPacketInternal( ANT_Packet * packet, int packetSize, unsigned int readTimeout);
     unsigned char     writeByte(unsigned char out, unsigned char chksum);
+
+    static void serial_print_byte_padded_hex(byte value);
+    static void serial_print_int_padded_dec(long int value, unsigned int width, boolean final_carriage_return = false);
 
   private:
     Stream* mySerial; //!< Serial -- Software serial or Hardware serial

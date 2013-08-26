@@ -310,15 +310,56 @@ const char * ANTPlus::get_msg_id_str(byte msg_id)
 }
 #endif
 
+//NOTE: This function calls Serial.println directly
+void ANTPlus::serial_print_byte_padded_hex(byte value)
+{
+    if(value <= 0x0F)
+  {
+      Serial.print(0, HEX);
+  }
+  Serial.print(value, HEX);
+}
+
+//NOTE: This function calls Serial.println directly
+void ANTPlus::serial_print_int_padded_dec(long int value, unsigned int width, boolean final_carriage_return)
+{
+  int div_num = value;
+  int div_cnt = 0;
+  while( div_num /= 10 )
+  {
+    div_cnt++;
+  }
+  if(div_cnt < width)
+  {
+    div_cnt = width - div_cnt - 1;
+  }
+  else
+  {
+    div_cnt = 0;
+  }
+  while( div_cnt-- )
+  {
+    Serial.print("0");
+  }
+  if(final_carriage_return)
+  {
+    Serial.println(value);
+  }
+  else
+  {
+    Serial.print(value);
+  }
+}
+
+
 //! Print a packet for debugging. Does decoding of some ids/codes
 //NOTE: This function calls Serial.println directly
-//TODO: Make this have an option to print to a different print function
 void ANTPlus::printPacket(const ANT_Packet * packet, boolean final_carriage_return = true)
 {
   Serial.print("RX[");
-  serial_print_int_padded_dec( rx_packet_count, 6 );
+  serial_print_int_padded_dec( rx_packet_count, 6, false );
   Serial.print("] @ ");
-  serial_print_int_padded_dec( millis(), 8 );
+  serial_print_int_padded_dec( millis(), 8, false );
   Serial.print(" ms > ");
 //  Serial.print("0x");
 //  serial_print_byte_padded_hex(packet->sync);
