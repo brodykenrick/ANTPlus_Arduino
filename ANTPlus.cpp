@@ -118,6 +118,9 @@ MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, u
         rxBuf[rxBufCnt++] = byteIn;
         if (rxBufCnt > packetSize)
         {
+          //Likely we are missing something....
+          //we reset our buffer count
+          rxBufCnt = 0;
           return MESSAGE_READ_ERROR_PACKET_SIZE_EXCEEDED;
         }
         else
@@ -142,6 +145,10 @@ MESSAGE_READ ANTPlus::readPacketInternal( ANT_Packet * packet, int packetSize, u
   
   if(rxBufCnt != 0)
   {
+    //This may be recoverable but it is likely not worth the effort
+    //we reset our buffer count
+    rxBufCnt = 0;
+  
     return MESSAGE_READ_INFO_TIMEOUT_MIDMESSAGE;
   }
   return MESSAGE_READ_NONE;
@@ -468,6 +475,8 @@ ANT_CHANNEL_ESTABLISH ANTPlus::progress_setup_channel( ANT_Channel * channel )
         }
     }
   }
+  
+  channel->channel_establish = ret_val;
   
   return ret_val;
 }

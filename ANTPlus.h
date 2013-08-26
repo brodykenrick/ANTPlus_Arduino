@@ -54,6 +54,7 @@
 #define DATA_PAGE_HEART_RATE_4ALT           (0x84)
 
 #define DATA_PAGE_SPEED_DISTANCE_1              (0x01) 
+#define DATA_PAGE_SPEED_DISTANCE_2              (0x02) 
 
 #define PUBLIC_NETWORK     (  0)
 
@@ -126,19 +127,45 @@ typedef struct ANT_SDMDataPage1_struct
   byte last_time_frac; //  1/200 of a second
   byte last_time_int;
   byte distance_int;
-  byte distance_frac;  //  1/16 of metre
-  byte inst_speed_int;
+//  byte distance_frac:4;  //  1/16 of metre
+  byte inst_speed_int:4;
+  byte distance_frac:4;  //  1/16 of metre
   byte inst_speed_frac;
   byte stride_count;
   byte update_latency;
 } ANT_SDMDataPage1;
 
 
+typedef struct ANT_SDMDataPage2_struct
+{
+  byte data_page_number;
+  byte reserved1;
+  byte reserved2;
+  byte cadence_int;
+//  byte cadence_frac:4;
+  byte inst_speed_int:4;
+  byte cadence_frac:4;
+  byte inst_speed_frac;
+  byte reserved6;
+  byte status;
+} ANT_SDMDataPage2;
+
+//! See progress_setup_channel().
+typedef enum
+{
+  ANT_CHANNEL_ESTABLISH_PROGRESSING,
+  ANT_CHANNEL_ESTABLISH_COMPLETE,
+  ANT_CHANNEL_ESTABLISH_ERROR,
+
+}   ANT_CHANNEL_ESTABLISH;
+
+#define ANT_CHANNEL_NUMBER_INVALID (-1)
 
 //! Details required to establish an ANT+ (and ANT?) channel. See progress_setup_channel().
 typedef struct ANT_Channel_struct
 {
-   int channel_number;
+   //Configuration items for channel
+   int channel_number; //TODO: Look at making this internally assigned
    int network_number;
    int timeout;
    int device_type;
@@ -146,7 +173,9 @@ typedef struct ANT_Channel_struct
    int period;
    unsigned char ant_net_key[8];
    
-   int state_counter;
+   ANT_CHANNEL_ESTABLISH channel_establish; //Read-only from external
+   boolean data_rx;                         //Broadcast data received. For now this is only updated from external. TODO: Move internally
+   int state_counter; //Private for internal use only
 } ANT_Channel;
  
 
@@ -166,14 +195,6 @@ typedef enum
 } MESSAGE_READ;
 
 
-//! See progress_setup_channel().
-typedef enum
-{
-  ANT_CHANNEL_ESTABLISH_PROGRESSING,
-  ANT_CHANNEL_ESTABLISH_COMPLETE,
-  ANT_CHANNEL_ESTABLISH_ERROR,
-
-}   ANT_CHANNEL_ESTABLISH;
 
 
 //TODO: Look at ANT and ANT+ and work out the appropriate breakdown for a subclass/separate class
