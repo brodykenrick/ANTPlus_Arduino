@@ -17,10 +17,10 @@
 #endif
 
 ANTPlus::ANTPlus(
-        int RTS_PIN,
-        int SUSPEND_PIN,
-        int SLEEP_PIN,
-        int RESET_PIN
+        byte RTS_PIN,
+        byte SUSPEND_PIN,
+        byte SLEEP_PIN,
+        byte RESET_PIN
 )
 {
     this->RTS_PIN = RTS_PIN;
@@ -310,6 +310,7 @@ const char * ANTPlus::get_msg_id_str(byte msg_id)
 }
 #endif
 
+
 //NOTE: This function calls Serial.println directly
 void ANTPlus::serial_print_byte_padded_hex(byte value)
 {
@@ -552,5 +553,35 @@ void ANTPlus::suspend(boolean activate_suspend)
 {
     //TODO:
     assert(false);
+}
+
+// SDM -- 6.2.2
+//Distance, time and stride count
+int ANTPlus::update_sdm_rollover( byte MessageValue, unsigned long int * Cumulative, byte * PreviousMessageValue )
+{
+  //Initialize CumulativeDistance to 0
+  //Above is external to this function
+  //PreviousMessageDistance is set to -1 to indicate no previous message -- external to this function
+  //initialize PreviousMessageDistance to the distance in the first SDM data message.
+  if((*PreviousMessageValue) == -1)
+  {
+    (*PreviousMessageValue) = MessageValue;
+    //This assumes that the first measurement we get from device is at 'point 0' -- any first measurement is therefore ignored in the cumulative
+  }
+  else
+  {
+    //For each subsequent SDM sensor Data message
+    //a. CumulativeDistance += MessageDistance – PreviousMessageDistance
+    (*Cumulative) += (MessageValue - (*PreviousMessageValue));
+  
+    //b. If PreviousMessageDistance > MessageDistance, CumulativeDistance += 256m
+    if ((*PreviousMessageValue) > MessageValue)
+    {
+      (*Cumulative) += 256; //All fields rollover on this amount
+    }
+    //c. PreviousMessageDistance = MessageDistance
+    (*PreviousMessageValue) = MessageValue;
+  }
+  return (*Cumulative);
 }
 

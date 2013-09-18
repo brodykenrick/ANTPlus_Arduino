@@ -28,6 +28,7 @@
 
 #if defined(NDEBUG)
 #undef ANTPLUS_DEBUG
+#undef ANTPLUS_MSG_STR_DECODE
 #endif
 
 //These are from the ANT+ packages (under Apache license)
@@ -35,9 +36,13 @@
 #include "antmessage.h"
 
 #define ANT_PACKET_READ_NEXT_BYTE_TIMEOUT_MS  (10) //<! If we get a byte in a read -- how long do we wait for the next byte before timing out...
-#define ANT_MAX_PACKET_LEN        (80)             //!< This is the size of a packet buffer that should be presented for a read function
 
-#define ANT_DEVICE_NUMBER_CHANNELS (8) //!< nRF24AP2 has an 8 channel version.
+#define ANT_MAX_PACKET_LEN        (40)
+//#define ANT_MAX_PACKET_LEN        (80)             //!< This is the size of a packet buffer that should be presented for a read function. Note you can optimise this for size if you only have small packets (e.g. HRM)
+
+//#define ANT_DEVICE_NUMBER_CHANNELS (8) //!< nRF24AP2 has an 8 channel version.
+//BK - Hack to save the teeniest of space....
+#define ANT_DEVICE_NUMBER_CHANNELS (1) //!< nRF24AP2 has an 8 channel version.
 
 
 
@@ -198,10 +203,10 @@ class ANTPlus
 {
   public:
     ANTPlus(
-        int RTS_PIN,
-        int SUSPEND_PIN,
-        int SLEEP_PIN,
-        int RESET_PIN
+        byte RTS_PIN,
+        byte SUSPEND_PIN,
+        byte SLEEP_PIN,
+        byte RESET_PIN
     );
 
     void     begin(Stream &serial);
@@ -227,6 +232,7 @@ class ANTPlus
     static const char * get_msg_id_str(byte msg_id);
 #endif /*defined(ANTPLUS_MSG_STR_DECODE)*/
 
+    static int update_sdm_rollover( byte MessageValue, unsigned long int * Cumulative, byte * PreviousMessageValue );
 
   private:
     MESSAGE_READ      readPacketInternal( ANT_Packet * packet, int packetSize, unsigned int readTimeout);
@@ -251,10 +257,10 @@ class ANTPlus
     int rxBufCnt;
     unsigned char rxBuf[ANT_MAX_PACKET_LEN];
 
-    int RTS_PIN;
-    int SUSPEND_PIN;
-    int SLEEP_PIN;
-    int RESET_PIN;
+    byte RTS_PIN;
+    byte SUSPEND_PIN;
+    byte SLEEP_PIN;
+    byte RESET_PIN;
 
 };
 
