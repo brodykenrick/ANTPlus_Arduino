@@ -37,7 +37,7 @@
 
 #define ANT_PACKET_READ_NEXT_BYTE_TIMEOUT_MS  (10) //<! If we get a byte in a read -- how long do we wait for the next byte before timing out...
 
-#define ANT_MAX_PACKET_LEN        (40)
+#define ANT_MAX_PACKET_LEN        (16) //BK Hack - Save space
 //#define ANT_MAX_PACKET_LEN        (80)             //!< This is the size of a packet buffer that should be presented for a read function. Note you can optimise this for size if you only have small packets (e.g. HRM)
 
 //#define ANT_DEVICE_NUMBER_CHANNELS (8) //!< nRF24AP2 has an 8 channel version.
