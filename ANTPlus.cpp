@@ -566,7 +566,7 @@ int ANTPlus::update_sdm_rollover( byte MessageValue, unsigned long int * Cumulat
   if((*PreviousMessageValue) == -1)
   {
     (*PreviousMessageValue) = MessageValue;
-    //This assumes that the first measurement we get from device is at 'point 0' -- any first measurement is therefore ignored in the cumulative
+    //This assumes that the first measurement we get from device is at 'point 0' -- any first measurement is therefore not counted in the cumulative
   }
   else
   {
