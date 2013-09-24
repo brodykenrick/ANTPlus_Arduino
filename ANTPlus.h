@@ -23,6 +23,8 @@
 #include <Arduino.h>
 #include <Stream.h>
 
+#define ANTPLUS_MINIMAL_RECEIVE_BUFFER_FOR_BROADCAST_DATA //<! Saves SRAM if we only expect to be receiving ANT+ HRM and SDM buffers.
+
 //#define ANTPLUS_DEBUG //!< Prints various debug messages. Disable here or via using NDEBUG externally
 //#define ANTPLUS_MSG_STR_DECODE //<! Stringiser for various codes for easier debugging
 
@@ -37,12 +39,15 @@
 
 #define ANT_PACKET_READ_NEXT_BYTE_TIMEOUT_MS  (10) //<! If we get a byte in a read -- how long do we wait for the next byte before timing out...
 
-#define ANT_MAX_PACKET_LEN        (16) //BK Hack - Save space
-//#define ANT_MAX_PACKET_LEN        (80)             //!< This is the size of a packet buffer that should be presented for a read function. Note you can optimise this for size if you only have small packets (e.g. HRM)
+#if defined(ANTPLUS_MINIMAL_RECEIVE_BUFFER_FOR_BROADCAST_DATA)
+#define ANT_MAX_PACKET_LEN        (16) //!< This is the size of a packet buffer that should be presented for a read function (optimised for size with only small broadcast packets (e.g. HRM) ).
+#else
+#define ANT_MAX_PACKET_LEN        (80)             //!< This is the size of a packet buffer that should be presented for a read function.
+#endif
 
+//BK - Hack to save the teeniest of SRAM space....
 //#define ANT_DEVICE_NUMBER_CHANNELS (8) //!< nRF24AP2 has an 8 channel version.
-//BK - Hack to save the teeniest of space....
-#define ANT_DEVICE_NUMBER_CHANNELS (1) //!< nRF24AP2 has an 8 channel version.
+#define ANT_DEVICE_NUMBER_CHANNELS (1) //!< nRF24AP2 has an 8 channel version. However -- it seems there are issues bringing up two channels with this code. TODO: Review and fix.
 
 
 
@@ -87,7 +92,7 @@ typedef struct ANT_Packet_struct
    byte length;
    byte msg_id;
    byte data[];//Variable -- elements == length
-   //byte checksum... This is data[length]. See ANT_PACKET_CHECKSUM
+   //byte checksum... This is data[length]. See ANT_PACKET_CHECKSUM macro "function".
 } ANT_Packet;
 
 #define ANT_PACKET_CHECKSUM(/*Ant_Packet * */ packet) (packet->data[packet->length])
@@ -128,7 +133,6 @@ typedef struct ANT_SDMDataPage1_struct
   byte last_time_frac; //  1/200 of a second
   byte last_time_int;
   byte distance_int;
-//  byte distance_frac:4;  //  1/16 of metre
   byte inst_speed_int:4;
   byte distance_frac:4;  //  1/16 of metre
   byte inst_speed_frac;
@@ -143,7 +147,6 @@ typedef struct ANT_SDMDataPage2_struct
   byte reserved1;
   byte reserved2;
   byte cadence_int;
-//  byte cadence_frac:4;
   byte inst_speed_int:4;
   byte cadence_frac:4;
   byte inst_speed_frac;
@@ -244,7 +247,7 @@ class ANTPlus
   private:
     Stream* mySerial; //!< Serial -- Software serial or Hardware serial
 
-  public: //TODO: Just temp
+  public: //TODO: Just temp (to eventually be removed -- or added to the interface properly)
     long rx_packet_count;
     long tx_packet_count;
     long hw_reset_count;
